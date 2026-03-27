@@ -1,5 +1,5 @@
 // Replace with your Render/backend URL when deployed
-const socket = io('http://localhost:3000'); 
+const socket = io('https://ice-breaker-backend.onrender.com'); 
 
 const urlParams = new URLSearchParams(window.location.search);
 const adminParam = urlParams.get('admin');
