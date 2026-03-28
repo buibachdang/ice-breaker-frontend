@@ -172,13 +172,82 @@ socket.on('gameOver', ({ winners, highestScore }) => {
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
+const joystick = {
+    active: false,
+    base: { x: 0, y: 0 },
+    stick: { x: 0, y: 0 },
+    touchId: null
+};
+
 window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = false; });
 
+function getTouchPos(canvas, evt) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top) * scaleY
+    };
+}
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    const pos = getTouchPos(canvas, touch);
+
+    // Only activate joystick on the left half of the screen
+    if (pos.x < canvas.width / 2) {
+        joystick.touchId = touch.identifier;
+        joystick.active = true;
+        joystick.base.x = pos.x;
+        joystick.base.y = pos.y;
+        joystick.stick.x = pos.x;
+        joystick.stick.y = pos.y;
+    } else {
+        // Handle clicking ice on the right half
+        handleIceClick(e);
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    for (let touch of e.changedTouches) {
+        if (touch.identifier === joystick.touchId) {
+            joystick.active = false;
+            joystick.touchId = null;
+            break;
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let touch of e.changedTouches) {
+        if (touch.identifier === joystick.touchId) {
+            const pos = getTouchPos(canvas, touch);
+            joystick.stick.x = pos.x;
+            joystick.stick.y = pos.y;
+            break;
+        }
+    }
+}, { passive: false });
+
+
 canvas.addEventListener('mousedown', (e) => {
+    // Don't handle mousedown if a touch joystick is active
+    if (joystick.touchId !== null) return;
+    handleIceClick(e);
+});
+
+function handleIceClick(evt) {
     if (!isPlaying || !myId) return;
     const player = playersData[myId];
     if (!player) return;
+
+    // For touch events, we use the first changed touch. For mouse, we use the event itself.
+    const pos = getTouchPos(canvas, evt.changedTouches ? evt.changedTouches[0] : evt);
 
     // Initialize click tracking on the player object if it's not there
     if (!player.clickTimestamps) player.clickTimestamps = [];
@@ -199,8 +268,8 @@ canvas.addEventListener('mousedown', (e) => {
     for (let i = 0; i < iceBlocks.length; i++) {
         const b = iceBlocks[i];
         if (!b.active) continue;
-        if (axeHeadX >= b.x && axeHeadX <= b.x + blockSize &&
-            axeHeadY >= b.y && axeHeadY <= b.y + blockSize) {
+        if (pos.x >= b.x && pos.x <= b.x + blockSize &&
+            pos.y >= b.y && pos.y <= b.y + blockSize) {
             hitIndex = i;
             break;
         }
@@ -231,23 +300,41 @@ canvas.addEventListener('mousedown', (e) => {
             checkIndex++;
         }
         
-        createParticles(axeHeadX, axeHeadY);
+        createParticles(pos.x, pos.y);
         socket.emit('clickIce', { sessionId, blocksToBreak });
     }
-});
+}
 
 function gameLoop() {
     if (!isPlaying) return;
 
     // Movement (Client prediction)
+    let moved = false;
     if (myId && playersData[myId]) {
         const speed = 5;
         let p = playersData[myId];
-        let moved = false;
+
+        // Keyboard movement
         if (keys.ArrowUp && p.y > 0) { p.y -= speed; moved = true; }
         if (keys.ArrowDown && p.y < 600) { p.y += speed; moved = true; }
         if (keys.ArrowLeft && p.x > 0) { p.x -= speed; moved = true; }
         if (keys.ArrowRight && p.x < 800) { p.x += speed; moved = true; }
+
+        // Joystick movement
+        if (joystick.active) {
+            const dx = joystick.stick.x - joystick.base.x;
+            const dy = joystick.stick.y - joystick.base.y;
+            const dist = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx);
+            
+            // Normalize and apply speed
+            if (dist > 10) { // Only move if stick is moved significantly
+                p.x += Math.cos(angle) * speed;
+                p.y += Math.sin(angle) * speed;
+                moved = true;
+            }
+        }
+
         if (moved) socket.emit('move', { sessionId, x: p.x, y: p.y });
     }
 
@@ -316,6 +403,19 @@ function gameLoop() {
         ctx.strokeText(`Score: ${p.score}`, p.x, p.y + 28);
         ctx.fillText(`Score: ${p.score}`, p.x, p.y + 28);
     });
+
+    // Draw Joystick if active
+    if (joystick.active) {
+        ctx.beginPath();
+        ctx.arc(joystick.base.x, joystick.base.y, 40, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(128, 128, 128, 0.3)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(joystick.stick.x, joystick.stick.y, 25, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(128, 128, 128, 0.6)';
+        ctx.fill();
+    }
 
     // Draw Warning Message if active
     if (warningMessage) {
