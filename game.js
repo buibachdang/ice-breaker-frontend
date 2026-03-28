@@ -44,7 +44,20 @@ document.getElementById('btn-start').onclick = () => socket.emit('startGame', se
 
 // 3. Socket Events
 socket.on('sessionCreated', (id) => {
-    window.location.href = `?admin=${id}`;
+    sessionId = id;
+    
+    // 1. Update the URL silently without reloading the page
+    window.history.pushState({}, '', `?admin=${id}`);
+    
+    // 2. Switch the UI to the Admin view
+    showView(viewAdmin);
+    
+    // 3. Populate the links on the dashboard
+    document.getElementById('admin-link').href = window.location.href;
+    document.getElementById('admin-link').innerText = "Admin Link";
+    const jLink = `${window.location.origin}${window.location.pathname}?join=${id}`;
+    document.getElementById('join-link').href = jLink;
+    document.getElementById('join-link').innerText = jLink;
 });
 
 socket.on('updatePlayers', (players) => {
