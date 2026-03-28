@@ -2,8 +2,9 @@
 const socket = io('https://ice-breaker-backend.onrender.com'); 
 
 const urlParams = new URLSearchParams(window.location.search);
-const adminParam = urlParams.get('admin');
+// const adminParam = urlParams.get('admin');
 const joinParam = urlParams.get('join');
+let isAdmin = urlParams.has('admin');
 
 let sessionId = '';
 let isPlaying = false;
@@ -19,8 +20,8 @@ const viewGame = document.getElementById('view-game');
 const joinSection = document.getElementById('join-section');
 
 // 1. Routing logic
-if (adminParam) {
-    sessionId = adminParam;
+if (isAdmin) {
+    sessionId = urlParams.get('admin');
     showView(viewAdmin);
     document.getElementById('admin-link').href = window.location.href;
     document.getElementById('admin-link').innerText = "Admin Link";
@@ -45,6 +46,7 @@ document.getElementById('btn-start').onclick = () => socket.emit('startGame', se
 // 3. Socket Events
 socket.on('sessionCreated', (id) => {
     sessionId = id;
+    isAdmin = true; // <--- ADD THIS LINE so the code remembers you are the admin!
     
     // 1. Update the URL silently without reloading the page
     window.history.pushState({}, '', `?admin=${id}`);
@@ -61,7 +63,7 @@ socket.on('sessionCreated', (id) => {
 });
 
 socket.on('updatePlayers', (players) => {
-    if (adminParam) {
+    if (isAdmin) {
         document.getElementById('admin-player-list').innerText = `Players joined: ${players.length}/20`;
     } else {
         showView(viewGame);
@@ -73,7 +75,7 @@ socket.on('updatePlayers', (players) => {
 socket.on('gameStarted', ({ players, time }) => {
     playersData = players;
     document.getElementById('timer').innerText = `Time: ${time}`;
-    if (adminParam) showView(viewGame); // Admin can watch
+    if (isAdmin) showView(viewGame); // Admin can watch
     isPlaying = true;
     requestAnimationFrame(gameLoop);
 });
