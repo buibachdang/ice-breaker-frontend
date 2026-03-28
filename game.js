@@ -18,18 +18,22 @@ function createParticles(x, y) {
 
 let warningTimeout = null;
 
-// Generate the visual ice blocks (Do this once outside the loop)
+// Generate exactly 1000 visual ice blocks
 const visualIceBlocks = [];
-const blockSize = 14;
-const rows = 16;
-for (let r = 0; r < rows; r++) {
+const blockSize = 12;
+let blocksCreated = 0;
+for (let r = 0; r < 50; r++) { // 50 rows is enough to fit 1000 blocks
+    if (blocksCreated >= 1000) break;
     const blocksInRow = r + 1;
     const startX = 400 - (blocksInRow * blockSize) / 2;
-    const y = 180 + r * blockSize;
+    const y = 80 + r * (blockSize - 2); // Slight overlap makes it look icy
     for (let c = 0; c < blocksInRow; c++) {
-        visualIceBlocks.push({ x: startX + c * blockSize, y: y });
+        if (blocksCreated >= 1000) break;
+        visualIceBlocks.push({ x: startX + c * blockSize, y: y, active: true });
+        blocksCreated++;
     }
 }
+
 // Randomize the blocks so the pyramid crumbles randomly instead of strictly top-down
 visualIceBlocks.sort(() => Math.random() - 0.5);
 
@@ -117,11 +121,20 @@ socket.on('gameStarted', ({ players, time }) => {
 
 socket.on('tick', (time) => document.getElementById('timer').innerText = `Time: ${time}`);
 socket.on('playerMoved', ({ id, x, y }) => { if (playersData[id]) { playersData[id].x = x; playersData[id].y = y; }});
-socket.on('iceUpdate', ({ iceRemaining, players }) => {
+
+socket.on('iceUpdate', ({ iceRemaining, brokenBlocks, players }) => {
     iceAmount = iceRemaining;
     playersData = players;
     document.getElementById('ice-counter').innerText = `Ice: ${iceAmount}`;
+    
+    // Deactivate the broken blocks visually
+    brokenBlocks.forEach(index => {
+        if (visualIceBlocks[index]) {
+            visualIceBlocks[index].active = false;
+        }
+    });
 });
+
 
 socket.on('gameOver', ({ winners, highestScore }) => {
     isPlaying = false;
@@ -149,22 +162,36 @@ canvas.addEventListener('mousedown', (e) => {
     const player = playersData[myId];
     if (!player) return;
 
-    // Calculate exact mouse click coordinates on the canvas
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+    // The precise coordinates of the tip of the player's pickaxe
+    const axeHeadX = player.x + 18;
+    const axeHeadY = player.y - 12;
 
-    const dist = Math.hypot(player.x - 400, player.y - 300);
-    
-    if (dist > 150) {
-        // Player is too far away
+    const distToCenter = Math.hypot(player.x - 400, player.y - 300);
+    if (distToCenter > 200) { 
         warningMessage = "Too far! Move closer!";
         clearTimeout(warningTimeout);
         warningTimeout = setTimeout(() => { warningMessage = ""; }, 1500);
-    } else {
-        // Player is close enough! Trigger the explosion exactly where they clicked
-        createParticles(clickX, clickY);
-        socket.emit('clickIce', sessionId);
+        return;
+    }
+
+    // Check which block the pickaxe is physically touching
+    let hitIndex = -1;
+    for (let i = visualIceBlocks.length - 1; i >= 0; i--) {
+        const b = visualIceBlocks[i];
+        if (!b.active) continue;
+        
+        // Bounding box collision check
+        if (axeHeadX >= b.x && axeHeadX <= b.x + blockSize &&
+            axeHeadY >= b.y && axeHeadY <= b.y + blockSize) {
+            hitIndex = i;
+            break;
+        }
+    }
+
+    // If the axe is touching a block, send that specific block to the server
+    if (hitIndex !== -1) {
+        createParticles(axeHeadX, axeHeadY);
+        socket.emit('clickIce', { sessionId, blockIndex: hitIndex });
     }
 });
 
@@ -192,15 +219,14 @@ function gameLoop() {
     
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    for (let i = 0; i < blocksToDraw; i++) {
+    for (let i = 0; i < visualIceBlocks.length; i++) {
         const block = visualIceBlocks[i];
+        if (!block.active) continue; // Skip broken blocks!
         
-        // Base cube color
         ctx.fillStyle = '#29b6f6'; 
         ctx.fillRect(block.x, block.y, blockSize, blockSize);
         ctx.strokeRect(block.x, block.y, blockSize, blockSize);
         
-        // Shiny highlight on top of the cube
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.fillRect(block.x, block.y, blockSize, blockSize / 3);
     }
@@ -288,7 +314,7 @@ function gameLoop() {
             ctx.fillRect(p.x, p.y, p.size, p.size);
         }
     }
-    
+
     requestAnimationFrame(gameLoop);
 }
 
