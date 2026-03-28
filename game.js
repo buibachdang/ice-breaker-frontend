@@ -18,20 +18,19 @@ function createParticles(x, y) {
 
 let warningTimeout = null;
 
-// Generate visual ice blocks in a circle
-const visualIceBlocks = [];
+let iceBlocks = [];
 const blockSize = 12;
 const iceRadius = 180; // The radius of the circular ice field
 for (let x = -iceRadius; x < iceRadius; x += blockSize) {
     for (let y = -iceRadius; y < iceRadius; y += blockSize) {
         if (Math.hypot(x, y) < iceRadius) {
-            visualIceBlocks.push({ x: 400 + x, y: 300 + y, active: true });
+            iceBlocks.push({ x: 400 + x, y: 300 + y, active: true });
         }
     }
 }
 
 // Replace with your Render/backend URL when deployed
-const socket = io('https://ice-breaker-backend.onrender.com'); 
+const socket = io('https://ice-breaker-backend.onrender.com');
 
 const urlParams = new URLSearchParams(window.location.search);
 // const adminParam = urlParams.get('admin');
@@ -42,7 +41,7 @@ let sessionId = '';
 let isPlaying = false;
 let myId = '';
 let playersData = {};
-let iceAmount = 1000;
+let iceAmount = 0;
 let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
 // UI Elements
@@ -88,10 +87,13 @@ document.getElementById('btn-start').onclick = () => {
         };
     });
 
+    // Client now sends the positions of the blocks it has generated
+    const blockPositions = iceBlocks.map(b => ({ x: b.x, y: b.y }));
+
     socket.emit('startGame', {
         sessionId,
         players: playerSpawns,
-        totalBlocks: visualIceBlocks.length
+        blockPositions: blockPositions
     });
 };
 
@@ -124,12 +126,13 @@ socket.on('updatePlayers', (players) => {
     }
 });
 
-socket.on('gameStarted', ({ players, time, totalBlocks }) => {
+socket.on('gameStarted', ({ players, time, iceBlocks: serverIceBlocks }) => {
     playersData = players;
-    iceAmount = totalBlocks;
+    iceBlocks = serverIceBlocks; // The server is the source of truth for block data
+    iceAmount = iceBlocks.length;
     document.getElementById('timer').innerText = `Time: ${time}`;
     document.getElementById('ice-counter').innerText = `Ice: ${iceAmount}`;
-    if (isAdmin) showView(viewGame); // Admin can watch
+    if (isAdmin) showView(viewGame);
     isPlaying = true;
     requestAnimationFrame(gameLoop);
 });
@@ -142,10 +145,10 @@ socket.on('iceUpdate', ({ iceRemaining, brokenBlocks, players }) => {
     playersData = players;
     document.getElementById('ice-counter').innerText = `Ice: ${iceAmount}`;
     
-    // Deactivate the broken blocks visually
+    // Server now sends only the newly broken blocks
     brokenBlocks.forEach(index => {
-        if (visualIceBlocks[index]) {
-            visualIceBlocks[index].active = false;
+        if (iceBlocks[index]) {
+            iceBlocks[index].active = false;
         }
     });
 });
@@ -193,8 +196,8 @@ canvas.addEventListener('mousedown', (e) => {
 
     // Find the primary block hit by the axe
     let hitIndex = -1;
-    for (let i = 0; i < visualIceBlocks.length; i++) {
-        const b = visualIceBlocks[i];
+    for (let i = 0; i < iceBlocks.length; i++) {
+        const b = iceBlocks[i];
         if (!b.active) continue;
         if (axeHeadX >= b.x && axeHeadX <= b.x + blockSize &&
             axeHeadY >= b.y && axeHeadY <= b.y + blockSize) {
@@ -214,11 +217,11 @@ canvas.addEventListener('mousedown', (e) => {
 
         // Find adjacent blocks to satisfy the combo
         let checkIndex = 0;
-        while (blocksToBreak.length < cubesToBreak && checkIndex < visualIceBlocks.length) {
-            if (checkIndex !== hitIndex && visualIceBlocks[checkIndex].active && !blocksToBreak.includes(checkIndex)) {
+        while (blocksToBreak.length < cubesToBreak && checkIndex < iceBlocks.length) {
+            if (checkIndex !== hitIndex && iceBlocks[checkIndex].active && !blocksToBreak.includes(checkIndex)) {
                 const dist = Math.hypot(
-                    visualIceBlocks[checkIndex].x - visualIceBlocks[hitIndex].x,
-                    visualIceBlocks[checkIndex].y - visualIceBlocks[hitIndex].y
+                    iceBlocks[checkIndex].x - iceBlocks[hitIndex].x,
+                    iceBlocks[checkIndex].y - iceBlocks[hitIndex].y
                 );
                 // If block is within ~2 block widths, consider it "adjacent" for combo purposes
                 if (dist < blockSize * 2.5) {
@@ -254,11 +257,11 @@ function gameLoop() {
     // Draw the Ice Blocks
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    for (let i = 0; i < visualIceBlocks.length; i++) {
-        const block = visualIceBlocks[i];
+    for (let i = 0; i < iceBlocks.length; i++) {
+        const block = iceBlocks[i];
         if (!block.active) continue; // Skip broken blocks!
         
-        ctx.fillStyle = '#29b6f6'; 
+        ctx.fillStyle = block.color; 
         ctx.fillRect(block.x, block.y, blockSize, blockSize);
         ctx.strokeRect(block.x, block.y, blockSize, blockSize);
         
