@@ -115,12 +115,12 @@ socket.on('sessionCreated', (id) => {
 });
 
 socket.on('updatePlayers', (players) => {
+    players.forEach(p => playersData[p.id] = p); // Keep everyone's data in sync
     if (isAdmin) {
         document.getElementById('admin-player-list').innerText = `Players joined: ${players.length}/20`;
     } else {
         showView(viewGame);
         myId = socket.id;
-        players.forEach(p => playersData[p.id] = p);
     }
 });
 
