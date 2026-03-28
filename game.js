@@ -18,24 +18,17 @@ function createParticles(x, y) {
 
 let warningTimeout = null;
 
-// Generate exactly 1000 visual ice blocks
+// Generate visual ice blocks in a circle
 const visualIceBlocks = [];
 const blockSize = 12;
-let blocksCreated = 0;
-for (let r = 0; r < 50; r++) { // 50 rows is enough to fit 1000 blocks
-    if (blocksCreated >= 1000) break;
-    const blocksInRow = r + 1;
-    const startX = 400 - (blocksInRow * blockSize) / 2;
-    const y = 80 + r * (blockSize - 2); // Slight overlap makes it look icy
-    for (let c = 0; c < blocksInRow; c++) {
-        if (blocksCreated >= 1000) break;
-        visualIceBlocks.push({ x: startX + c * blockSize, y: y, active: true });
-        blocksCreated++;
+const iceRadius = 180; // The radius of the circular ice field
+for (let x = -iceRadius; x < iceRadius; x += blockSize) {
+    for (let y = -iceRadius; y < iceRadius; y += blockSize) {
+        if (Math.hypot(x, y) < iceRadius) {
+            visualIceBlocks.push({ x: 400 + x, y: 300 + y, active: true });
+        }
     }
 }
-
-// Randomize the blocks so the pyramid crumbles randomly instead of strictly top-down
-visualIceBlocks.sort(() => Math.random() - 0.5);
 
 // Replace with your Render/backend URL when deployed
 const socket = io('https://ice-breaker-backend.onrender.com'); 
@@ -80,7 +73,27 @@ document.getElementById('btn-join').onclick = () => {
     if (name) socket.emit('joinSession', { sessionId, name });
 };
 document.getElementById('input-time').onchange = (e) => socket.emit('updateTime', { sessionId, time: e.target.value });
-document.getElementById('btn-start').onclick = () => socket.emit('startGame', sessionId);
+document.getElementById('btn-start').onclick = () => {
+    // New: Calculate spawn points in a circle around the ice
+    const playerIds = Object.keys(playersData);
+    const spawnRadius = iceRadius + 60; // Spawn players 60px away from the ice edge
+    const angleIncrement = (2 * Math.PI) / playerIds.length;
+    
+    const playerSpawns = {};
+    playerIds.forEach((id, index) => {
+        const angle = index * angleIncrement;
+        playerSpawns[id] = {
+            x: 400 + spawnRadius * Math.cos(angle),
+            y: 300 + spawnRadius * Math.sin(angle)
+        };
+    });
+
+    socket.emit('startGame', {
+        sessionId,
+        players: playerSpawns,
+        totalBlocks: visualIceBlocks.length
+    });
+};
 
 // 3. Socket Events
 socket.on('sessionCreated', (id) => {
@@ -111,9 +124,11 @@ socket.on('updatePlayers', (players) => {
     }
 });
 
-socket.on('gameStarted', ({ players, time }) => {
+socket.on('gameStarted', ({ players, time, totalBlocks }) => {
     playersData = players;
+    iceAmount = totalBlocks;
     document.getElementById('timer').innerText = `Time: ${time}`;
+    document.getElementById('ice-counter').innerText = `Ice: ${iceAmount}`;
     if (isAdmin) showView(viewGame); // Admin can watch
     isPlaying = true;
     requestAnimationFrame(gameLoop);
@@ -162,25 +177,25 @@ canvas.addEventListener('mousedown', (e) => {
     const player = playersData[myId];
     if (!player) return;
 
-    // The precise coordinates of the tip of the player's pickaxe
+    // Initialize click tracking on the player object if it's not there
+    if (!player.clickTimestamps) player.clickTimestamps = [];
+
     const axeHeadX = player.x + 18;
     const axeHeadY = player.y - 12;
 
-    const distToCenter = Math.hypot(player.x - 400, player.y - 300);
-    if (distToCenter > 200) { 
+    // Check if the axe is reasonably close to the ice field
+    if (Math.hypot(axeHeadX - 400, axeHeadY - 300) > iceRadius + 20) {
         warningMessage = "Too far! Move closer!";
         clearTimeout(warningTimeout);
         warningTimeout = setTimeout(() => { warningMessage = ""; }, 1500);
         return;
     }
 
-    // Check which block the pickaxe is physically touching
+    // Find the primary block hit by the axe
     let hitIndex = -1;
-    for (let i = visualIceBlocks.length - 1; i >= 0; i--) {
+    for (let i = 0; i < visualIceBlocks.length; i++) {
         const b = visualIceBlocks[i];
         if (!b.active) continue;
-        
-        // Bounding box collision check
         if (axeHeadX >= b.x && axeHeadX <= b.x + blockSize &&
             axeHeadY >= b.y && axeHeadY <= b.y + blockSize) {
             hitIndex = i;
@@ -188,10 +203,33 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
-    // If the axe is touching a block, send that specific block to the server
     if (hitIndex !== -1) {
+        // Client-side combo calculation
+        const now = Date.now();
+        player.clickTimestamps = player.clickTimestamps.filter(t => now - t < 1000);
+        player.clickTimestamps.push(now);
+        const cubesToBreak = Math.min(5, 1 + Math.floor(player.clickTimestamps.length / 2));
+
+        const blocksToBreak = [hitIndex];
+
+        // Find adjacent blocks to satisfy the combo
+        let checkIndex = 0;
+        while (blocksToBreak.length < cubesToBreak && checkIndex < visualIceBlocks.length) {
+            if (checkIndex !== hitIndex && visualIceBlocks[checkIndex].active && !blocksToBreak.includes(checkIndex)) {
+                const dist = Math.hypot(
+                    visualIceBlocks[checkIndex].x - visualIceBlocks[hitIndex].x,
+                    visualIceBlocks[checkIndex].y - visualIceBlocks[hitIndex].y
+                );
+                // If block is within ~2 block widths, consider it "adjacent" for combo purposes
+                if (dist < blockSize * 2.5) {
+                    blocksToBreak.push(checkIndex);
+                }
+            }
+            checkIndex++;
+        }
+        
         createParticles(axeHeadX, axeHeadY);
-        socket.emit('clickIce', { sessionId, blockIndex: hitIndex });
+        socket.emit('clickIce', { sessionId, blocksToBreak });
     }
 });
 
@@ -213,10 +251,7 @@ function gameLoop() {
     // Clear Canvas
     ctx.clearRect(0, 0, 800, 600);
 
-    // Draw the Ice Pyramid (The new cube logic!)
-    // Calculate how many visual cubes to draw based on the 1000 total pool
-    const blocksToDraw = Math.ceil((iceAmount / 1000) * visualIceBlocks.length);
-    
+    // Draw the Ice Blocks
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
     for (let i = 0; i < visualIceBlocks.length; i++) {
