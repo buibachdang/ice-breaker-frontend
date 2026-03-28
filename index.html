@@ -25,6 +25,16 @@
             <p>Player Join Link: <a href="#" id="join-link" target="_blank"></a></p>
             <label>Game Time (30 - 300s):</label>
             <input type="number" id="input-time" min="30" max="300" value="60">
+            <br>
+            <label>Ice Shape:</label>
+            <select id="input-shape">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+            </select>
+            <br>
+            <label>Ice Size (Base Radius/Width):</label>
+            <input type="number" id="input-size" min="50" max="250" value="100">
+            <input type="number" id="input-time" min="30" max="300" value="60">
             <div id="admin-player-list">Waiting for players...</div>
             <button id="btn-start">Start Game</button>
         </div>
