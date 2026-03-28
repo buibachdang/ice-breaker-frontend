@@ -1,5 +1,21 @@
 // Add these variables near the top of game.js with your other variables
 let warningMessage = "";
+let particles = [];
+
+// Generates an explosion of 12 white squares at a specific X, Y coordinate
+function createParticles(x, y) {
+    for (let i = 0; i < 12; i++) {
+        particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 10, // Random velocity left/right
+            vy: (Math.random() - 0.5) * 10, // Random velocity up/down
+            life: 1.0,                      // Starts fully visible (opacity 1)
+            size: Math.random() * 5 + 2     // Random size between 2px and 7px
+        });
+    }
+}
+
 let warningTimeout = null;
 
 // Generate the visual ice blocks (Do this once outside the loop)
@@ -133,6 +149,11 @@ canvas.addEventListener('mousedown', (e) => {
     const player = playersData[myId];
     if (!player) return;
 
+    // Calculate exact mouse click coordinates on the canvas
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
     const dist = Math.hypot(player.x - 400, player.y - 300);
     
     if (dist > 150) {
@@ -141,7 +162,8 @@ canvas.addEventListener('mousedown', (e) => {
         clearTimeout(warningTimeout);
         warningTimeout = setTimeout(() => { warningMessage = ""; }, 1500);
     } else {
-        // Player is close enough to mine
+        // Player is close enough! Trigger the explosion exactly where they clicked
+        createParticles(clickX, clickY);
         socket.emit('clickIce', sessionId);
     }
 });
@@ -244,6 +266,29 @@ function gameLoop() {
         }
     }
 
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        
+        // Move the particle
+        p.x += p.vx;
+        p.y += p.vy;
+        
+        // Add a tiny bit of gravity so they arc downwards
+        p.vy += 0.2; 
+        
+        // Fade it out
+        p.life -= 0.03; 
+
+        if (p.life <= 0) {
+            // Remove dead particles from the array
+            particles.splice(i, 1);
+        } else {
+            // Draw living particles with fading opacity
+            ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+    }
+    
     requestAnimationFrame(gameLoop);
 }
 
