@@ -1,3 +1,22 @@
+// Add these variables near the top of game.js with your other variables
+let warningMessage = "";
+let warningTimeout = null;
+
+// Generate the visual ice blocks (Do this once outside the loop)
+const visualIceBlocks = [];
+const blockSize = 14;
+const rows = 16;
+for (let r = 0; r < rows; r++) {
+    const blocksInRow = r + 1;
+    const startX = 400 - (blocksInRow * blockSize) / 2;
+    const y = 180 + r * blockSize;
+    for (let c = 0; c < blocksInRow; c++) {
+        visualIceBlocks.push({ x: startX + c * blockSize, y: y });
+    }
+}
+// Randomize the blocks so the pyramid crumbles randomly instead of strictly top-down
+visualIceBlocks.sort(() => Math.random() - 0.5);
+
 // Replace with your Render/backend URL when deployed
 const socket = io('https://ice-breaker-backend.onrender.com'); 
 
@@ -111,12 +130,18 @@ window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.code)) keys[
 
 canvas.addEventListener('mousedown', (e) => {
     if (!isPlaying || !myId) return;
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+    const player = playersData[myId];
+    if (!player) return;
+
+    const dist = Math.hypot(player.x - 400, player.y - 300);
     
-    // Check if clicked inside the central ice area
-    if (clickX > 300 && clickX < 500 && clickY > 200 && clickY < 400) {
+    if (dist > 150) {
+        // Player is too far away
+        warningMessage = "Too far! Move closer!";
+        clearTimeout(warningTimeout);
+        warningTimeout = setTimeout(() => { warningMessage = ""; }, 1500);
+    } else {
+        // Player is close enough to mine
         socket.emit('clickIce', sessionId);
     }
 });
@@ -126,7 +151,7 @@ function gameLoop() {
 
     // Movement (Client prediction)
     if (myId && playersData[myId]) {
-        const speed = 4;
+        const speed = 5;
         let p = playersData[myId];
         let moved = false;
         if (keys.ArrowUp && p.y > 0) { p.y -= speed; moved = true; }
@@ -136,42 +161,88 @@ function gameLoop() {
         if (moved) socket.emit('move', { sessionId, x: p.x, y: p.y });
     }
 
-    // Drawing
+    // Clear Canvas
     ctx.clearRect(0, 0, 800, 600);
 
-    // Draw Ice Pyramid
-    ctx.fillStyle = '#81d4fa';
-    ctx.beginPath();
-    ctx.moveTo(400, 200);
-    ctx.lineTo(500, 400);
-    ctx.lineTo(300, 400);
-    ctx.fill();
-    ctx.stroke();
+    // Draw the Ice Pyramid (The new cube logic!)
+    // Calculate how many visual cubes to draw based on the 1000 total pool
+    const blocksToDraw = Math.ceil((iceAmount / 1000) * visualIceBlocks.length);
+    
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    for (let i = 0; i < blocksToDraw; i++) {
+        const block = visualIceBlocks[i];
+        
+        // Base cube color
+        ctx.fillStyle = '#29b6f6'; 
+        ctx.fillRect(block.x, block.y, blockSize, blockSize);
+        ctx.strokeRect(block.x, block.y, blockSize, blockSize);
+        
+        // Shiny highlight on top of the cube
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillRect(block.x, block.y, blockSize, blockSize / 3);
+    }
 
     // Draw Players
     Object.values(playersData).forEach(p => {
-        // Body
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y + 12, 10, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Player Body
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Axe line
+        // Pickaxe Handle
         ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + 15, p.y - 15);
+        ctx.moveTo(p.x + 5, p.y);
+        ctx.lineTo(p.x + 20, p.y - 15);
         ctx.lineWidth = 3;
+        ctx.strokeStyle = '#795548'; // Wood color
         ctx.stroke();
-        ctx.lineWidth = 1;
+        
+        // Pickaxe Head
+        ctx.beginPath();
+        ctx.moveTo(p.x + 12, p.y - 17);
+        ctx.lineTo(p.x + 25, p.y - 8);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#9e9e9e'; // Iron color
+        ctx.stroke();
 
-        // Name and Score
-        ctx.fillStyle = 'black';
-        ctx.font = '12px Arial';
+        // Name and Score Text
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(p.name, p.x, p.y - 20);
-        ctx.fillText(`Score: ${p.score}`, p.x, p.y + 25);
+        // Add white outline to text so it's readable over the ice
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.strokeText(p.name, p.x, p.y - 25);
+        ctx.fillText(p.name, p.x, p.y - 25);
+        
+        ctx.font = '12px sans-serif';
+        ctx.strokeText(`Score: ${p.score}`, p.x, p.y + 28);
+        ctx.fillText(`Score: ${p.score}`, p.x, p.y + 28);
     });
+
+    // Draw Warning Message if active
+    if (warningMessage) {
+        const player = playersData[myId];
+        if (player) {
+            ctx.fillStyle = '#d32f2f';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.strokeText(warningMessage, player.x, player.y - 45);
+            ctx.fillText(warningMessage, player.x, player.y - 45);
+        }
+    }
 
     requestAnimationFrame(gameLoop);
 }
