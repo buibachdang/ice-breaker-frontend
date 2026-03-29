@@ -331,7 +331,7 @@ function handleIceClick(evt) {
     const axeHeadX = player.x + 18;
     const axeHeadY = player.y - 12;
 
-    // Check if the axe is reasonably close to the ice field
+    // Check if the axe is outside the ice field. If so, show warning and stop.
     if (Math.hypot(axeHeadX - 400, axeHeadY - 300) > iceRadius + 20) {
         warningMessage = "Too far! Move closer!";
         clearTimeout(warningTimeout);
@@ -352,6 +352,7 @@ function handleIceClick(evt) {
     }
 
     if (hitIndex !== -1) {
+        // A block was successfully hit
         playIceHitSound();
         iceBlocks[hitIndex].color = 'white';
         // Client-side combo calculation
@@ -381,6 +382,7 @@ function handleIceClick(evt) {
         createParticles(iceBlocks[hitIndex].x + blockSize / 2, iceBlocks[hitIndex].y + blockSize / 2);
         socket.emit('clickIce', { sessionId, blocksToBreak });
     }
+    // If inside the perimeter but no block is hit, do nothing.
 }
 
 function gameLoop() {
