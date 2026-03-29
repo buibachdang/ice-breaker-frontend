@@ -20,11 +20,11 @@ let warningTimeout = null;
 
 let iceBlocks = [];
 const blockSize = 12;
-const iceRadius = 180; // The radius of the circular ice field
+const iceRadius = 90; // The radius of the circular ice field
 for (let x = -iceRadius; x < iceRadius; x += blockSize) {
     for (let y = -iceRadius; y < iceRadius; y += blockSize) {
         if (Math.hypot(x, y) < iceRadius) {
-            iceBlocks.push({ x: 400 + x, y: 300 + y, active: true });
+            iceBlocks.push({ x: 400 + x, y: 300 + y, active: true, color: '#aee9ff' });
         }
     }
 }
@@ -42,7 +42,6 @@ let isPlaying = false;
 let myId = '';
 let playersData = {};
 let iceAmount = 0;
-let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
 // UI Elements
 const viewLanding = document.getElementById('view-landing');
@@ -179,8 +178,32 @@ const joystick = {
     touchId: null
 };
 
-window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = true; });
-window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = false; });
+window.addEventListener('keydown', (e) => {
+    if (!isPlaying || !myId || !playersData[myId]) return;
+
+    let p = playersData[myId];
+    let moved = false;
+    const moveAmount = blockSize; // move one block at a time
+
+    switch (e.code) {
+        case 'ArrowUp':
+            if (p.y > 0) { p.y -= moveAmount; moved = true; }
+            break;
+        case 'ArrowDown':
+            if (p.y < 600) { p.y += moveAmount; moved = true; }
+            break;
+        case 'ArrowLeft':
+            if (p.x > 0) { p.x -= moveAmount; moved = true; }
+            break;
+        case 'ArrowRight':
+            if (p.x < 800) { p.x += moveAmount; moved = true; }
+            break;
+    }
+
+    if (moved) {
+        socket.emit('move', { sessionId, x: p.x, y: p.y });
+    }
+});
 
 function getTouchPos(canvas, evt) {
     const rect = canvas.getBoundingClientRect();
@@ -276,6 +299,7 @@ function handleIceClick(evt) {
     }
 
     if (hitIndex !== -1) {
+        iceBlocks[hitIndex].color = 'white';
         // Client-side combo calculation
         const now = Date.now();
         player.clickTimestamps = player.clickTimestamps.filter(t => now - t < 1000);
@@ -300,7 +324,7 @@ function handleIceClick(evt) {
             checkIndex++;
         }
         
-        createParticles(pos.x, pos.y);
+        createParticles(iceBlocks[hitIndex].x + blockSize / 2, iceBlocks[hitIndex].y + blockSize / 2);
         socket.emit('clickIce', { sessionId, blocksToBreak });
     }
 }
@@ -313,12 +337,6 @@ function gameLoop() {
     if (myId && playersData[myId]) {
         const speed = 5;
         let p = playersData[myId];
-
-        // Keyboard movement
-        if (keys.ArrowUp && p.y > 0) { p.y -= speed; moved = true; }
-        if (keys.ArrowDown && p.y < 600) { p.y += speed; moved = true; }
-        if (keys.ArrowLeft && p.x > 0) { p.x -= speed; moved = true; }
-        if (keys.ArrowRight && p.x < 800) { p.x += speed; moved = true; }
 
         // Joystick movement
         if (joystick.active) {
