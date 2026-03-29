@@ -57,6 +57,29 @@ function playIceHitSound() {
     }
 }
 
+// Sound for hitting a penalty block — low descending buzz
+function playPenaltySound() {
+    if (!audioCtx) return;
+    const play = () => {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.3);
+    };
+    if (audioCtx.state === 'running') {
+        play();
+    } else {
+        audioCtx.resume().then(play);
+    }
+}
+
 // Sound for the last 10 seconds countdown
 function playTickSound() {
     if (!audioCtx) return;
@@ -412,7 +435,11 @@ function handleIceClick(evt) {
     if (hitIndex !== -1) {
         // A block was successfully hit
         lastSwingTime = Date.now();
-        playIceHitSound();
+        if (iceBlocks[hitIndex].score < 0) {
+            playPenaltySound();
+        } else {
+            playIceHitSound();
+        }
         iceBlocks[hitIndex].color = 'white';
         // Client-side combo calculation
         const now = Date.now();
