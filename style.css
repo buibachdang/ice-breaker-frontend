@@ -24,11 +24,12 @@ body, html {
     background: transparent; padding: 0; box-shadow: none; border: none; position: relative; max-width: none;
 }
 
-canvas { 
-    background: linear-gradient(to bottom, #81d4fa 0%, #e0f7fa 100%); 
-    border: 6px solid #ffffff; border-radius: 12px; 
+canvas {
+    background: linear-gradient(to bottom, #81d4fa 0%, #e0f7fa 100%);
+    border: 6px solid #ffffff; border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0, 151, 167, 0.3);
-    cursor: crosshair; 
+    cursor: crosshair;
+    touch-action: none;
 }
 
 #hud { 

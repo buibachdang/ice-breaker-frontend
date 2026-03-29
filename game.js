@@ -85,6 +85,8 @@ function createParticles(x, y) {
 }
 
 let warningTimeout = null;
+let lastFrameTime = 0;
+let lastMoveEmit = 0;
 
 let iceBlocks = [];
 const blockSize = 12;
@@ -212,13 +214,22 @@ socket.on('tick', (time) => {
         playTickSound();
     }
 });
-socket.on('playerMoved', ({ id, x, y }) => { if (playersData[id]) { playersData[id].x = x; playersData[id].y = y; }});
+socket.on('playerMoved', ({ id, x, y }) => {
+    // Don't overwrite our own position — we use client-side prediction
+    if (id !== myId && playersData[id]) { playersData[id].x = x; playersData[id].y = y; }
+});
 
 socket.on('iceUpdate', ({ iceRemaining, brokenBlocks, players }) => {
     iceAmount = iceRemaining;
+    // Preserve our own client-predicted position — only update scores/other state from server
+    const myPos = (myId && playersData[myId]) ? { x: playersData[myId].x, y: playersData[myId].y } : null;
     playersData = players;
+    if (myPos && playersData[myId]) {
+        playersData[myId].x = myPos.x;
+        playersData[myId].y = myPos.y;
+    }
     document.getElementById('ice-counter').innerText = `Ice: ${iceAmount}`;
-    
+
     // Server now sends only the newly broken blocks
     brokenBlocks.forEach(index => {
         if (iceBlocks[index]) {
@@ -414,8 +425,12 @@ function handleIceClick(evt) {
     // If inside the perimeter but no block is hit, do nothing.
 }
 
-function gameLoop() {
+function gameLoop(timestamp) {
     if (!isPlaying) return;
+
+    // Delta-time: normalise movement to 60fps regardless of actual frame rate
+    const dt = lastFrameTime ? Math.min((timestamp - lastFrameTime) / 16.67, 3) : 1;
+    lastFrameTime = timestamp;
 
     // Movement (Client prediction)
     let moved = false;
@@ -429,16 +444,20 @@ function gameLoop() {
             const dy = joystick.stick.y - joystick.base.y;
             const dist = Math.hypot(dx, dy);
             const angle = Math.atan2(dy, dx);
-            
-            // Normalize and apply speed
+
+            // Normalize and apply speed scaled by delta-time
             if (dist > 10) { // Only move if stick is moved significantly
-                p.x += Math.cos(angle) * speed;
-                p.y += Math.sin(angle) * speed;
+                p.x += Math.cos(angle) * speed * dt;
+                p.y += Math.sin(angle) * speed * dt;
                 moved = true;
             }
         }
 
-        if (moved) socket.emit('move', { sessionId, x: p.x, y: p.y });
+        // Throttle network emissions to ~20/s to avoid flooding on mobile
+        if (moved && timestamp - lastMoveEmit > 50) {
+            socket.emit('move', { sessionId, x: p.x, y: p.y });
+            lastMoveEmit = timestamp;
+        }
     }
 
     // Clear Canvas
