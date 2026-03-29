@@ -28,15 +28,12 @@ function initAudio() {
     }
 }
 
-// One-time listener to initialize audio on the first user interaction
-function initAudioOnFirstInteraction() {
+// Explicit "Tap to enable sound" button — most reliable way to unlock audio on iOS
+const audioPrompt = document.getElementById('audio-prompt');
+document.getElementById('btn-enable-audio').addEventListener('click', () => {
     initAudio();
-    document.removeEventListener('click', initAudioOnFirstInteraction);
-    document.removeEventListener('touchstart', initAudioOnFirstInteraction);
-}
-
-document.addEventListener('click', initAudioOnFirstInteraction);
-document.addEventListener('touchstart', initAudioOnFirstInteraction);
+    audioPrompt.style.display = 'none';
+});
 
 // Sound for breaking ice
 function playIceHitSound() {
@@ -206,16 +203,18 @@ socket.on('updatePlayers', (players) => {
     } else {
         showView(viewGame);
         myId = socket.id;
+        audioPrompt.style.display = 'block'; // Prompt player to unlock audio as soon as they see the game view
     }
 });
 
 socket.on('gameStarted', ({ players, time, iceBlocks: serverIceBlocks }) => {
     playersData = players;
-    iceBlocks = serverIceBlocks; // The server is the source of truth for block data
+    iceBlocks = serverIceBlocks;
     iceAmount = iceBlocks.length;
     document.getElementById('timer').innerText = `Time: ${time}`;
     document.getElementById('ice-counter').innerText = `Ice: ${iceAmount}`;
     if (isAdmin) showView(viewGame);
+    audioPrompt.style.display = 'block'; // Prompt player to unlock audio
     isPlaying = true;
     requestAnimationFrame(gameLoop);
 });
