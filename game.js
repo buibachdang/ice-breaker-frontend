@@ -3,15 +3,34 @@ let warningMessage = "";
 let particles = [];
 let audioCtx; // To be initialized on user gesture
 
+// A robust way to initialize and resume audio context
 function initAudio() {
     if (!audioCtx) {
         try {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            // On iOS and some browsers, the context is created in a "suspended" state.
+            // It must be resumed by a user gesture.
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         } catch (e) {
             console.error("Web Audio API is not supported in this browser", e);
         }
+    } else if (audioCtx.state === 'suspended') {
+        // If the context exists but is suspended, try to resume it.
+        audioCtx.resume();
     }
 }
+
+// One-time listener to initialize audio on the first user interaction
+function initAudioOnFirstInteraction() {
+    initAudio();
+    document.removeEventListener('click', initAudioOnFirstInteraction);
+    document.removeEventListener('touchstart', initAudioOnFirstInteraction);
+}
+
+document.addEventListener('click', initAudioOnFirstInteraction);
+document.addEventListener('touchstart', initAudioOnFirstInteraction);
 
 // Sound for breaking ice
 function playIceHitSound() {
@@ -109,11 +128,9 @@ if (isAdmin) {
 
 // 2. Buttons
 document.getElementById('btn-create').onclick = () => {
-    initAudio();
     socket.emit('createSession');
 };
 document.getElementById('btn-join').onclick = () => {
-    initAudio();
     const name = document.getElementById('input-name').value;
     if (name) socket.emit('joinSession', { sessionId, name });
 };
@@ -325,7 +342,6 @@ canvas.addEventListener('mousedown', (e) => {
 
 function handleIceClick(evt) {
     if (!isPlaying || !myId) return;
-    initAudio(); // Initialize audio on first click if not already
     const player = playersData[myId];
     if (!player) return;
 
