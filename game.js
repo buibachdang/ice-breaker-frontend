@@ -96,6 +96,8 @@ function createParticles(x, y) {
 let warningTimeout = null;
 let lastFrameTime = 0;
 let lastMoveEmit = 0;
+const SWING_COOLDOWN = 300;
+let lastSwingTime = 0;
 
 let iceBlocks = [];
 const blockSize = 12;
@@ -374,6 +376,10 @@ function handleIceClick(evt) {
     const player = playersData[myId];
     if (!player) return;
 
+    // Client-side cooldown check
+    const now = Date.now();
+    if (now - lastSwingTime < SWING_COOLDOWN) return;
+
     // For touch events, we use the first changed touch. For mouse, we use the event itself.
     const pos = getTouchPos(canvas, evt.changedTouches ? evt.changedTouches[0] : evt);
 
@@ -405,6 +411,7 @@ function handleIceClick(evt) {
 
     if (hitIndex !== -1) {
         // A block was successfully hit
+        lastSwingTime = Date.now();
         playIceHitSound();
         iceBlocks[hitIndex].color = 'white';
         // Client-side combo calculation
@@ -482,12 +489,24 @@ function gameLoop(timestamp) {
         const block = iceBlocks[i];
         if (!block.active) continue; // Skip broken blocks!
         
-        ctx.fillStyle = block.color; 
+        ctx.fillStyle = block.color;
         ctx.fillRect(block.x, block.y, blockSize, blockSize);
         ctx.strokeRect(block.x, block.y, blockSize, blockSize);
-        
+
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.fillRect(block.x, block.y, blockSize, blockSize / 3);
+
+        // Draw X on penalty blocks
+        if (block.score < 0) {
+            ctx.strokeStyle = 'rgba(255, 220, 220, 0.9)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(block.x + 2, block.y + 2);
+            ctx.lineTo(block.x + blockSize - 2, block.y + blockSize - 2);
+            ctx.moveTo(block.x + blockSize - 2, block.y + 2);
+            ctx.lineTo(block.x + 2, block.y + blockSize - 2);
+            ctx.stroke();
+        }
     }
 
     // Draw Players
@@ -506,6 +525,18 @@ function gameLoop(timestamp) {
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Cooldown arc for local player — fills up as swing becomes ready
+        if (p.id === myId) {
+            const cooldownProgress = Math.min(1, (Date.now() - lastSwingTime) / SWING_COOLDOWN);
+            if (cooldownProgress < 1) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 16, -Math.PI / 2, -Math.PI / 2 + cooldownProgress * Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
         
         // Pickaxe Handle
         ctx.beginPath();
