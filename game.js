@@ -217,6 +217,13 @@ socket.on('gameOver', ({ winners, highestScore }) => {
     } else {
         winText.innerText = "Game Over! No ice broken.";
     }
+
+    if (isAdmin) {
+        const backToHomeLink = document.getElementById('back-to-home-link');
+        if (backToHomeLink) {
+            backToHomeLink.style.display = 'inline-block';
+        }
+    }
 });
 
 // 4. Game Loop & Canvas
