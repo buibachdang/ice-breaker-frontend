@@ -1,6 +1,49 @@
 // Add these variables near the top of game.js with your other variables
 let warningMessage = "";
 let particles = [];
+let audioCtx; // To be initialized on user gesture
+
+function initAudio() {
+    if (!audioCtx) {
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.error("Web Audio API is not supported in this browser", e);
+        }
+    }
+}
+
+// Sound for breaking ice
+function playIceHitSound() {
+    if (!audioCtx) return;
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(660, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.15);
+}
+
+// Sound for the last 10 seconds countdown
+function playTickSound() {
+    if (!audioCtx) return;
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.1);
+}
 
 // Generates an explosion of 12 white squares at a specific X, Y coordinate
 function createParticles(x, y) {
@@ -65,8 +108,12 @@ if (isAdmin) {
 }
 
 // 2. Buttons
-document.getElementById('btn-create').onclick = () => socket.emit('createSession');
+document.getElementById('btn-create').onclick = () => {
+    initAudio();
+    socket.emit('createSession');
+};
 document.getElementById('btn-join').onclick = () => {
+    initAudio();
     const name = document.getElementById('input-name').value;
     if (name) socket.emit('joinSession', { sessionId, name });
 };
@@ -136,7 +183,12 @@ socket.on('gameStarted', ({ players, time, iceBlocks: serverIceBlocks }) => {
     requestAnimationFrame(gameLoop);
 });
 
-socket.on('tick', (time) => document.getElementById('timer').innerText = `Time: ${time}`);
+socket.on('tick', (time) => {
+    document.getElementById('timer').innerText = `Time: ${time}`;
+    if (time > 0 && time <= 10) {
+        playTickSound();
+    }
+});
 socket.on('playerMoved', ({ id, x, y }) => { if (playersData[id]) { playersData[id].x = x; playersData[id].y = y; }});
 
 socket.on('iceUpdate', ({ iceRemaining, brokenBlocks, players }) => {
@@ -266,6 +318,7 @@ canvas.addEventListener('mousedown', (e) => {
 
 function handleIceClick(evt) {
     if (!isPlaying || !myId) return;
+    initAudio(); // Initialize audio on first click if not already
     const player = playersData[myId];
     if (!player) return;
 
@@ -299,6 +352,7 @@ function handleIceClick(evt) {
     }
 
     if (hitIndex !== -1) {
+        playIceHitSound();
         iceBlocks[hitIndex].color = 'white';
         // Client-side combo calculation
         const now = Date.now();
