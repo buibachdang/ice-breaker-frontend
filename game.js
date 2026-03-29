@@ -41,6 +41,7 @@ document.addEventListener('touchstart', initAudioOnFirstInteraction);
 // Sound for breaking ice
 function playIceHitSound() {
     if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     oscillator.connect(gainNode);
@@ -57,6 +58,7 @@ function playIceHitSound() {
 // Sound for the last 10 seconds countdown
 function playTickSound() {
     if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     oscillator.connect(gainNode);
@@ -310,6 +312,7 @@ function getTouchPos(canvas, evt) {
 
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    initAudio(); // Ensure audio is unlocked on every touch — iOS requires this in the gesture handler
     const touch = e.changedTouches[0];
     const pos = getTouchPos(canvas, touch);
 
