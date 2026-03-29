@@ -22,7 +22,9 @@
         <div id="view-admin" class="view">
             <h2>Admin Dashboard</h2>
             <p>Admin Link: <a href="#" id="admin-link"></a> (Keep this secret!)</p>
-            <p>Player Join Link: <a href="#" id="join-link" target="_blank"></a></p>
+            <p>Player Join Link: <a href="#" id="join-link" target="_blank"></a>
+                <button id="btn-copy-link" onclick="navigator.clipboard.writeText(document.getElementById('join-link').href).then(() => { this.innerText = 'Copied!'; setTimeout(() => this.innerText = 'Copy Link', 2000); })">Copy Link</button>
+            </p>
             <label>Game Time (30 - 300s):</label>
             <input type="number" id="input-time" min="30" max="300" value="60">
             <div id="admin-player-list">Waiting for players...</div>
