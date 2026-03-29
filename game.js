@@ -268,8 +268,8 @@ function handleIceClick(evt) {
     for (let i = 0; i < iceBlocks.length; i++) {
         const b = iceBlocks[i];
         if (!b.active) continue;
-        if (pos.x >= b.x && pos.x <= b.x + blockSize &&
-            pos.y >= b.y && pos.y <= b.y + blockSize) {
+        if (axeHeadX >= b.x && axeHeadX <= b.x + blockSize &&
+            axeHeadY >= b.y && axeHeadY <= b.y + blockSize) {
             hitIndex = i;
             break;
         }
