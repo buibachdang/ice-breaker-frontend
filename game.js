@@ -13,6 +13,12 @@ function initAudio() {
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
+            // Play a silent sound to "unlock" the audio context
+            const buffer = audioCtx.createBuffer(1, 1, 22050);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
         } catch (e) {
             console.error("Web Audio API is not supported in this browser", e);
         }
