@@ -46,14 +46,16 @@ canvas {
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
 }
 
-button { 
+button, .button { 
+    display: inline-block;
     padding: 12px 24px; font-size: 16px; font-weight: bold; margin: 10px; 
     cursor: pointer; background: #00acc1; color: white; 
     border: none; border-radius: 8px; transition: all 0.2s ease;
     box-shadow: 0 4px 6px rgba(0, 172, 193, 0.3);
+    text-decoration: none;
 }
-button:hover { background: #00838f; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0, 172, 193, 0.4); }
-button:active { transform: translateY(0); }
+button:hover, .button:hover { background: #00838f; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0, 172, 193, 0.4); }
+button:active, .button:active { transform: translateY(0); }
 
 input { 
     padding: 12px; font-size: 16px; margin: 10px; 

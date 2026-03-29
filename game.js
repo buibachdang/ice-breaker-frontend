@@ -335,8 +335,8 @@ function handleIceClick(evt) {
     // Initialize click tracking on the player object if it's not there
     if (!player.clickTimestamps) player.clickTimestamps = [];
 
-    const axeHeadX = player.x + 18;
-    const axeHeadY = player.y - 12;
+    const axeHeadX = player.x + 25;
+    const axeHeadY = player.y - 8;
 
     // Check if the axe is outside the ice field. If so, show warning and stop.
     if (Math.hypot(axeHeadX - 400, axeHeadY - 300) > iceRadius + 20) {
