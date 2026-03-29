@@ -435,7 +435,7 @@ function gameLoop(timestamp) {
     // Movement (Client prediction)
     let moved = false;
     if (myId && playersData[myId]) {
-        const speed = 3;
+        const speed = 2;
         let p = playersData[myId];
 
         // Joystick movement
